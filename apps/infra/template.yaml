@@ -1,0 +1,322 @@
+Resources:
+  DriveVpcF5FFD6EC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/Resource
+  DriveVpcPublicSubnet1SubnetE8C6E989:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.0.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Public
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: DriveStack/DriveVpc/PublicSubnet1
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet1/Subnet
+  DriveVpcPublicSubnet1RouteTable55816397:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc/PublicSubnet1
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet1/RouteTable
+  DriveVpcPublicSubnet1RouteTableAssociation5F654762:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: DriveVpcPublicSubnet1RouteTable55816397
+      SubnetId:
+        Ref: DriveVpcPublicSubnet1SubnetE8C6E989
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet1/RouteTableAssociation
+  DriveVpcPublicSubnet1DefaultRouteBA641018:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: DriveVpcIGW6DAF0216
+      RouteTableId:
+        Ref: DriveVpcPublicSubnet1RouteTable55816397
+    DependsOn:
+      - DriveVpcVPCGWCAD96325
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet1/DefaultRoute
+  DriveVpcPublicSubnet2SubnetB67F699D:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.64.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Public
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: DriveStack/DriveVpc/PublicSubnet2
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet2/Subnet
+  DriveVpcPublicSubnet2RouteTable3A42C629:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc/PublicSubnet2
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet2/RouteTable
+  DriveVpcPublicSubnet2RouteTableAssociation9C33466A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: DriveVpcPublicSubnet2RouteTable3A42C629
+      SubnetId:
+        Ref: DriveVpcPublicSubnet2SubnetB67F699D
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet2/RouteTableAssociation
+  DriveVpcPublicSubnet2DefaultRoute46A80C22:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: DriveVpcIGW6DAF0216
+      RouteTableId:
+        Ref: DriveVpcPublicSubnet2RouteTable3A42C629
+    DependsOn:
+      - DriveVpcVPCGWCAD96325
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/PublicSubnet2/DefaultRoute
+  DriveVpcIsolatedSubnet1Subnet230BE51B:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.128.0/18
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Isolated
+        - Key: aws-cdk:subnet-type
+          Value: Isolated
+        - Key: Name
+          Value: DriveStack/DriveVpc/IsolatedSubnet1
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet1/Subnet
+  DriveVpcIsolatedSubnet1RouteTable30906D6E:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc/IsolatedSubnet1
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet1/RouteTable
+  DriveVpcIsolatedSubnet1RouteTableAssociation2302ED92:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: DriveVpcIsolatedSubnet1RouteTable30906D6E
+      SubnetId:
+        Ref: DriveVpcIsolatedSubnet1Subnet230BE51B
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet1/RouteTableAssociation
+  DriveVpcIsolatedSubnet2Subnet00D9F298:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.192.0/18
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Isolated
+        - Key: aws-cdk:subnet-type
+          Value: Isolated
+        - Key: Name
+          Value: DriveStack/DriveVpc/IsolatedSubnet2
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet2/Subnet
+  DriveVpcIsolatedSubnet2RouteTableC85C749E:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc/IsolatedSubnet2
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet2/RouteTable
+  DriveVpcIsolatedSubnet2RouteTableAssociationE9A595AB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: DriveVpcIsolatedSubnet2RouteTableC85C749E
+      SubnetId:
+        Ref: DriveVpcIsolatedSubnet2Subnet00D9F298
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IsolatedSubnet2/RouteTableAssociation
+  DriveVpcIGW6DAF0216:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DriveStack/DriveVpc
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/IGW
+  DriveVpcVPCGWCAD96325:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: DriveVpcIGW6DAF0216
+      VpcId:
+        Ref: DriveVpcF5FFD6EC
+    Metadata:
+      aws:cdk:path: DriveStack/DriveVpc/VPCGW
+  CDKMetadata:
+    Type: AWS::CDK::Metadata
+    Properties:
+      Analytics: v2:deflate64:H4sIAAAAAAAA/0WNzQrCMBCEn6X3dJUIgsfSg3grrfQqm3TF9CeRZNMipe8uopjTzHwMMxLk8QT7DJeQ627IR6NgbRj1IHAJN9IS1vapRXm3bVWKKqrR6CYqS/xhydUuMl1RjZR4YkUIThtk4+y/LCpvZmRKGxfL5C3xGZkWfP1Of6lgRv2YyPImagouek2bsK4j6MNulhLkAWTWB2NyHy2biaD+6huOgSiF5QAAAA==
+    Metadata:
+      aws:cdk:path: DriveStack/CDKMetadata/Default
+    Condition: CDKMetadataAvailable
+Conditions:
+  CDKMetadataAvailable:
+    Fn::Or:
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - af-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-3
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-south-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-3
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-4
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ca-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ca-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-northwest-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-central-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-south-2
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-3
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - il-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - me-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - me-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - sa-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-west-1
+      - Fn::Equals:
+          - Ref: AWS::Region
+          - us-west-2
+Parameters:
+  BootstrapVersion:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /cdk-bootstrap/hnb659fds/version
+    Description: Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]
+

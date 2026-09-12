@@ -1,0 +1,94 @@
+# =========================
+# Dependencies
+# =========================
+node_modules
+
+# pnpm
+.pnpm-store
+
+# =========================
+# Build Outputs
+# =========================
+dist
+build
+coverage
+.next
+out
+
+# CDK
+cdk.out
+
+# Turbo
+.turbo
+
+# Vite
+vite.svg
+
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Prisma
+# =========================
+prisma/dev.db
+prisma/dev.db-journal
+
+# =========================
+# Logs
+# =========================
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# IDE
+# =========================
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Claude / Agents / AI Tools
+# =========================
+.claude
+.agent
+.agents
+.cursor
+.cursor-tutor
+.aider*
+.roo
+.roo-cache
+.continue
+.devin
+
+# =========================
+# Temporary Files
+# =========================
+tmp
+temp
+.tmp
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Local stack
+# =========================
+
+localstack
+
+

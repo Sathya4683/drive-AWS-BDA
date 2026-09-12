@@ -1,0 +1,24 @@
+# for local testing spinning up docker containers
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: drive
+    ports:
+      - "5433:5432"
+
+  minio:
+    image: quay.io/minio/minio
+    container_name: drive-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+volumes: {}

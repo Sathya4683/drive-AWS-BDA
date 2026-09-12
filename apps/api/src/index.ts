@@ -1,11 +1,523 @@
 import express from "express";
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import multer from "multer";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
+const prisma = new PrismaClient();
 const app = express();
 
-app.get("/", (_, res) => {
-  res.send("Hello World");
+const JWT_SECRET = process.env.JWT_SECRET ?? "super-secret";
+
+app.use(express.json());
+
+app.get("/health", async (_req, res) => {
+  res.json({
+    status: "ok",
+  });
 });
 
+app.post("/auth/signup", async (req, res) => {
+  const { username, password } = req.body;
+
+  const existingUser = await prisma.user.findUnique({
+    where: {
+      username,
+    },
+  });
+
+  if (existingUser) {
+    return res.status(409).json({
+      message: "Username already exists",
+    });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      username,
+      password: hashedPassword,
+    },
+  });
+
+  return res.status(201).json({
+    id: user.id,
+    username: user.username,
+  });
+});
+
+app.post("/auth/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  const user = await prisma.user.findUnique({
+    where: {
+      username,
+    },
+  });
+
+  if (!user) {
+    return res.status(401).json({
+      message: "Invalid credentials",
+    });
+  }
+
+  const isValidPassword = await bcrypt.compare(password, user.password);
+
+  if (!isValidPassword) {
+    return res.status(401).json({
+      message: "Invalid credentials",
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user.id,
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "7d",
+    },
+  );
+
+  return res.json({
+    token,
+  });
+});
+
+//
+interface AuthenticatedRequest extends express.Request {
+  // without this, in the below authMiddleWare function
+  // ts cries that property userId doesn't exist on AuthenticatedRequest
+  userId?: string;
+}
+
+// attaching userId to the req object
+// essentially promoting a value from deep within the JWT payload
+// and attaching it directly to req for convenience
+function authMiddleware(
+  req: AuthenticatedRequest,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({
+      message: "Unauthorized",
+    });
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as {
+      userId: string;
+    };
+
+    req.userId = payload.userId;
+
+    next();
+  } catch {
+    return res.status(401).json({
+      message: "Invalid token",
+    });
+  }
+}
+
+app.post("/auth/verify", authMiddleware, async (_req, res) => {
+  return res.json({
+    valid: true,
+  });
+});
+
+// using the JWT payload attached to req.userID, find user Details
+app.get("/auth/me", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: req.userId,
+    },
+    select: {
+      id: true,
+      username: true,
+      createdAt: true,
+    },
+  });
+
+  if (!user) {
+    return res.status(404).json({
+      message: "User not found",
+    });
+  }
+
+  return res.json(user);
+});
+
+// Simulating folders thru DB, not S3.. since S3 doesn't really have folders
+app.post("/folders", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const { name } = req.body;
+
+  const folder = await prisma.folder.create({
+    data: {
+      name,
+      userId: req.userId!,
+    },
+  });
+
+  return res.status(201).json(folder);
+});
+
+// return folders based on the descending order of creation time
+// also just for simplicity, only supporting top level folders (folders
+// can't have folders within - not modelled in the schema.prisma)
+
+// A folder hierarchy could be simulated on the frontend using
+// file key prefixes (similar to how S3 represents folders).
+app.get("/folders", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const folders = await prisma.folder.findMany({
+    where: {
+      userId: req.userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return res.json(folders);
+});
+
+// renaming folder name
+app.patch(
+  "/folders/:folderId",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const { name } = req.body;
+    const folderId = req.params.folderId as string;
+    const folder = await prisma.folder.updateMany({
+      where: {
+        id: folderId,
+        userId: req.userId,
+      },
+      data: {
+        name,
+      },
+    });
+
+    if (folder.count === 0) {
+      return res.status(404).json({
+        message: "Folder not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+    });
+  },
+);
+
+app.delete(
+  "/folders/:folderId",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const folderId = req.params.folderId as string;
+
+    const result = await prisma.folder.deleteMany({
+      where: {
+        id: folderId,
+        userId: req.userId,
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({
+        message: "Folder not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+    });
+  },
+);
+
+// No need to query S3 here, file metadata and folder associations
+// are stored in the database.
+app.get(
+  "/folders/:folderId/files",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const folderId = req.params.folderId as string;
+
+    const folder = await prisma.folder.findFirst({
+      where: {
+        id: folderId,
+        userId: req.userId,
+      },
+    });
+
+    if (!folder) {
+      return res.status(404).json({
+        message: "Folder not found",
+      });
+    }
+
+    const files = await prisma.file.findMany({
+      where: {
+        folderId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return res.json(files);
+  },
+);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
+
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  endpoint: process.env.S3_ENDPOINT,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+// attached the file to req.file
+// multipart-formatdata requst
+app.post(
+  "/files/upload",
+  authMiddleware,
+  upload.single("file"),
+  async (req: AuthenticatedRequest, res) => {
+    if (!req.file) {
+      return res.status(400).json({
+        message: "File is required",
+      });
+    }
+
+    const { folderId } = req.body;
+
+    const folder = await prisma.folder.findFirst({
+      where: {
+        id: folderId,
+        userId: req.userId,
+      },
+    });
+
+    if (!folder) {
+      return res.status(404).json({
+        message: "Folder not found",
+      });
+    }
+
+    // allows users to send files with same names (since Date.now())
+    const key = `users/${req.userId}/${Date.now()}-${req.file.originalname}`;
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.FILES_BUCKET_NAME!,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }),
+    );
+
+    const file = await prisma.file.create({
+      data: {
+        name: req.file.originalname,
+        size: req.file.size,
+        mimeType: req.file.mimetype,
+        s3Key: key,
+        userId: req.userId!,
+        folderId,
+      },
+    });
+
+    return res.status(201).json(file);
+  },
+);
+
+app.get("/files", authMiddleware, async (req: AuthenticatedRequest, res) => {
+  const files = await prisma.file.findMany({
+    where: {
+      userId: req.userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return res.json(files);
+});
+
+app.get(
+  "/files/:fileId/download",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const fileId = req.params.fileId as string;
+
+    const file = await prisma.file.findFirst({
+      where: {
+        id: fileId,
+        userId: req.userId,
+      },
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    if (!file.s3Key) {
+      return res.status(500).json({
+        message: "File is missing S3 key",
+      });
+    }
+    const url = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: process.env.FILES_BUCKET_NAME!,
+        Key: file.s3Key,
+      }),
+      {
+        expiresIn: 3600,
+      },
+    );
+
+    return res.json({
+      url,
+    });
+  },
+);
+
+app.patch(
+  "/files/:fileId",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const { name } = req.body;
+    const fileId = req.params.fileId as string;
+
+    const file = await prisma.file.findFirst({
+      where: {
+        id: fileId,
+        userId: req.userId,
+      },
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    const updatedFile = await prisma.file.update({
+      where: {
+        id: fileId,
+      },
+      data: {
+        name,
+      },
+    });
+
+    return res.json(updatedFile);
+  },
+);
+
+app.patch(
+  "/files/:fileId/move",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const fileId = req.params.fileId as string;
+    const { folderId } = req.body;
+
+    const file = await prisma.file.findFirst({
+      where: {
+        id: fileId,
+        userId: req.userId,
+      },
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    const folder = await prisma.folder.findFirst({
+      where: {
+        id: folderId,
+        userId: req.userId,
+      },
+    });
+
+    if (!folder) {
+      return res.status(404).json({
+        message: "Folder not found",
+      });
+    }
+
+    const updatedFile = await prisma.file.update({
+      where: {
+        id: fileId,
+      },
+      data: {
+        folderId,
+      },
+    });
+
+    return res.json(updatedFile);
+  },
+);
+
+app.delete(
+  "/files/:fileId",
+  authMiddleware,
+  async (req: AuthenticatedRequest, res) => {
+    const fileId = req.params.fileId as string;
+
+    const file = await prisma.file.findFirst({
+      where: {
+        id: fileId,
+        userId: req.userId,
+      },
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        message: "File not found",
+      });
+    }
+
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: process.env.FILES_BUCKET_NAME!,
+        Key: file.s3Key!,
+      }),
+    );
+
+    await prisma.file.delete({
+      where: {
+        id: fileId,
+      },
+    });
+
+    return res.json({
+      message: "File deleted",
+    });
+  },
+);
+
 app.listen(3000, () => {
-  console.log("Listening on 3000");
+  console.log("API running on port 3000");
 });

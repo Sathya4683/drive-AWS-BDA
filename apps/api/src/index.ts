@@ -1,24 +1,40 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import cors from "cors";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+import type {
+  HealthResponse,
+  SignupResponse,
+  LoginResponse,
+  VerifyResponse,
+  MeUser,
+  Folder,
+  FileItem,
+  DownloadResponse,
+  SuccessResponse,
+  ErrorResponse,
+  FileDeleteResponse,
+} from "shared-types";
+import { UPLOAD_FILE_FIELD, UPLOAD_FOLDER_ID_FIELD } from "shared-types";
 
 const prisma = new PrismaClient();
 const app = express();
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "super-secret";
 
+app.use(cors());
 app.use(express.json());
 
 app.get("/health", async (_req, res) => {
   res.json({
     status: "ok",
-  });
+  } as HealthResponse);
 });
 
 app.post("/auth/signup", async (req, res) => {
@@ -33,7 +49,7 @@ app.post("/auth/signup", async (req, res) => {
   if (existingUser) {
     return res.status(409).json({
       message: "Username already exists",
-    });
+    } as ErrorResponse);
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -48,7 +64,7 @@ app.post("/auth/signup", async (req, res) => {
   return res.status(201).json({
     id: user.id,
     username: user.username,
-  });
+  } as SignupResponse);
 });
 
 app.post("/auth/login", async (req, res) => {
@@ -63,7 +79,7 @@ app.post("/auth/login", async (req, res) => {
   if (!user) {
     return res.status(401).json({
       message: "Invalid credentials",
-    });
+    } as ErrorResponse);
   }
 
   const isValidPassword = await bcrypt.compare(password, user.password);
@@ -71,7 +87,7 @@ app.post("/auth/login", async (req, res) => {
   if (!isValidPassword) {
     return res.status(401).json({
       message: "Invalid credentials",
-    });
+    } as ErrorResponse);
   }
 
   const token = jwt.sign(
@@ -86,7 +102,7 @@ app.post("/auth/login", async (req, res) => {
 
   return res.json({
     token,
-  });
+  } as LoginResponse);
 });
 
 //
@@ -109,7 +125,7 @@ function authMiddleware(
   if (!authHeader) {
     return res.status(401).json({
       message: "Unauthorized",
-    });
+    } as ErrorResponse);
   }
 
   const token = authHeader.replace("Bearer ", "");
@@ -125,14 +141,14 @@ function authMiddleware(
   } catch {
     return res.status(401).json({
       message: "Invalid token",
-    });
+    } as ErrorResponse);
   }
 }
 
 app.post("/auth/verify", authMiddleware, async (_req, res) => {
   return res.json({
     valid: true,
-  });
+  } as VerifyResponse);
 });
 
 // using the JWT payload attached to req.userID, find user Details
@@ -151,10 +167,10 @@ app.get("/auth/me", authMiddleware, async (req: AuthenticatedRequest, res) => {
   if (!user) {
     return res.status(404).json({
       message: "User not found",
-    });
+    } as ErrorResponse);
   }
 
-  return res.json(user);
+  return res.json(user as unknown as MeUser);
 });
 
 // Simulating folders thru DB, not S3.. since S3 doesn't really have folders
@@ -168,7 +184,7 @@ app.post("/folders", authMiddleware, async (req: AuthenticatedRequest, res) => {
     },
   });
 
-  return res.status(201).json(folder);
+  return res.status(201).json(folder as unknown as Folder);
 });
 
 // return folders based on the descending order of creation time
@@ -187,7 +203,7 @@ app.get("/folders", authMiddleware, async (req: AuthenticatedRequest, res) => {
     },
   });
 
-  return res.json(folders);
+  return res.json(folders as unknown as Folder[]);
 });
 
 // renaming folder name
@@ -210,12 +226,12 @@ app.patch(
     if (folder.count === 0) {
       return res.status(404).json({
         message: "Folder not found",
-      });
+      } as ErrorResponse);
     }
 
     return res.json({
       success: true,
-    });
+    } as SuccessResponse);
   },
 );
 
@@ -235,12 +251,12 @@ app.delete(
     if (result.count === 0) {
       return res.status(404).json({
         message: "Folder not found",
-      });
+      } as ErrorResponse);
     }
 
     return res.json({
       success: true,
-    });
+    } as SuccessResponse);
   },
 );
 
@@ -262,7 +278,7 @@ app.get(
     if (!folder) {
       return res.status(404).json({
         message: "Folder not found",
-      });
+      } as ErrorResponse);
     }
 
     const files = await prisma.file.findMany({
@@ -274,7 +290,7 @@ app.get(
       },
     });
 
-    return res.json(files);
+    return res.json(files as unknown as FileItem[]);
   },
 );
 
@@ -297,15 +313,15 @@ const s3 = new S3Client({
 app.post(
   "/files/upload",
   authMiddleware,
-  upload.single("file"),
+  upload.single(UPLOAD_FILE_FIELD),
   async (req: AuthenticatedRequest, res) => {
     if (!req.file) {
       return res.status(400).json({
         message: "File is required",
-      });
+      } as ErrorResponse);
     }
 
-    const { folderId } = req.body;
+    const folderId = req.body[UPLOAD_FOLDER_ID_FIELD] as string;
 
     const folder = await prisma.folder.findFirst({
       where: {
@@ -317,7 +333,7 @@ app.post(
     if (!folder) {
       return res.status(404).json({
         message: "Folder not found",
-      });
+      } as ErrorResponse);
     }
 
     // allows users to send files with same names (since Date.now())
@@ -343,7 +359,7 @@ app.post(
       },
     });
 
-    return res.status(201).json(file);
+    return res.status(201).json(file as unknown as FileItem);
   },
 );
 
@@ -357,7 +373,7 @@ app.get("/files", authMiddleware, async (req: AuthenticatedRequest, res) => {
     },
   });
 
-  return res.json(files);
+  return res.json(files as unknown as FileItem[]);
 });
 
 app.get(
@@ -376,13 +392,13 @@ app.get(
     if (!file) {
       return res.status(404).json({
         message: "File not found",
-      });
+      } as ErrorResponse);
     }
 
     if (!file.s3Key) {
       return res.status(500).json({
         message: "File is missing S3 key",
-      });
+      } as ErrorResponse);
     }
     const url = await getSignedUrl(
       s3,
@@ -397,7 +413,7 @@ app.get(
 
     return res.json({
       url,
-    });
+    } as DownloadResponse);
   },
 );
 
@@ -418,7 +434,7 @@ app.patch(
     if (!file) {
       return res.status(404).json({
         message: "File not found",
-      });
+      } as ErrorResponse);
     }
 
     const updatedFile = await prisma.file.update({
@@ -430,7 +446,7 @@ app.patch(
       },
     });
 
-    return res.json(updatedFile);
+    return res.json(updatedFile as unknown as FileItem);
   },
 );
 
@@ -451,7 +467,7 @@ app.patch(
     if (!file) {
       return res.status(404).json({
         message: "File not found",
-      });
+      } as ErrorResponse);
     }
 
     const folder = await prisma.folder.findFirst({
@@ -464,7 +480,7 @@ app.patch(
     if (!folder) {
       return res.status(404).json({
         message: "Folder not found",
-      });
+      } as ErrorResponse);
     }
 
     const updatedFile = await prisma.file.update({
@@ -476,7 +492,7 @@ app.patch(
       },
     });
 
-    return res.json(updatedFile);
+    return res.json(updatedFile as unknown as FileItem);
   },
 );
 
@@ -496,7 +512,7 @@ app.delete(
     if (!file) {
       return res.status(404).json({
         message: "File not found",
-      });
+      } as ErrorResponse);
     }
 
     await s3.send(
@@ -514,7 +530,7 @@ app.delete(
 
     return res.json({
       message: "File deleted",
-    });
+    } as FileDeleteResponse);
   },
 );
 

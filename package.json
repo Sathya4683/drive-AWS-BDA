@@ -1,14 +1,16 @@
 {
-    "name": "drive-aws-bda",
-    "private": true,
-    "packageManager": "pnpm@10.32.1",
-    "scripts": {
-        "build": "turbo build",
-        "dev": "turbo dev",
-        "lint": "turbo lint",
-        "typecheck": "turbo typecheck"
-    },
-    "devDependencies": {
-        "turbo": "^2.10.12"
-    }
+  "name": "drive-aws-bda",
+  "private": true,
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "turbo": "^2.10.12"
+  }
 }

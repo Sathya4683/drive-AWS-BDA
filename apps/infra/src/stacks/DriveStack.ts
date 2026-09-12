@@ -43,6 +43,9 @@ export class DriveStack extends cdk.Stack {
     // 0.0.0.0/0 -> anyone from internet can access our EC2 for HTTP
     apiSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80));
 
+    // SSH stuff
+    apiSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22));
+
     // same for HTTPS
     apiSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443));
 
@@ -104,6 +107,12 @@ export class DriveStack extends cdk.Stack {
       instanceType: new ec2.InstanceType("t3.micro"),
 
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+
+      associatePublicIpAddress: true,
     });
 
     // allowing EC2 to read and write from the user files containing bucket
